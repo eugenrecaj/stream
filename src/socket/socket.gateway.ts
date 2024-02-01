@@ -61,6 +61,20 @@ export class ChatGateway
     this.server.to(room.toString()).emit('answer', answer);
   }
 
+  @SubscribeMessage('join-room')
+  joinRoom(@MessageBody() data: any, @ConnectedSocket() client: Socket): void {
+    const roomId = data.room;
+    const userId = data.id;
+
+    console.log(userId, 'roomId');
+
+    this.server.to(roomId).emit('user-connected', userId);
+
+    this.server.on('disconnect', () => {
+      this.server.to(roomId).emit('user-disconnected', userId);
+    });
+  }
+
   @SubscribeMessage('candidate')
   handleCandidate(
     @MessageBody() data: any,
