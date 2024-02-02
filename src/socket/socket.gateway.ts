@@ -26,10 +26,10 @@ export class ChatGateway
   @WebSocketServer() server: Server;
 
   afterInit(server: Server) {
-    console.log('Init WebSocket Server');
+    console.log('WebSocket Server initialized');
   }
 
-  handleConnection(client: Socket, ...args: any[]) {
+  handleConnection(client: Socket) {
     console.log(`Client connected: ${client.id}`);
   }
 
@@ -38,12 +38,20 @@ export class ChatGateway
   }
 
   @SubscribeMessage('offer')
-  handleOffer(client: Socket, payload: any): void {
+  handleOffer(client: Socket, payload: string): void {
+    console.log('Offer received and broadcasted');
     client.broadcast.emit('offer', payload);
   }
 
   @SubscribeMessage('answer')
-  handleAnswer(client: Socket, payload: any): void {
+  handleAnswer(client: Socket, payload: string): void {
+    console.log('Answer received and broadcasted');
     client.broadcast.emit('answer', payload);
+  }
+
+  @SubscribeMessage('candidate')
+  handleCandidate(client: Socket, payload: string): void {
+    console.log('ICE Candidate received and broadcasted');
+    client.broadcast.emit('candidate', payload);
   }
 }
