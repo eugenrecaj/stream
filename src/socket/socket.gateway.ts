@@ -25,68 +25,54 @@ export class ChatGateway
   constructor() {}
   @WebSocketServer() server: Server;
 
-  @SubscribeMessage('message')
-  async handleMessage(client: Socket, payload): Promise<void> {
-    console.log(payload);
+  users = {};
+  socketToRoom = {};
 
-    client.broadcast.emit('message', payload);
+  handleDisconnect(client: Socket) {
+    const roomID = this.socketToRoom[client.id];
+    let room = this.users[roomID];
+    if (room) {
+      room = room.filter((id) => id !== client.id);
+      this.users[roomID] = room;
+    }
   }
 
-  @SubscribeMessage('offer')
-  handleOffer(
-    @MessageBody() data: any,
-    @ConnectedSocket() client: Socket,
-  ): void {
-    console.log(data); // This should show the entire object received
+  @SubscribeMessage('join room')
+  handleJoinRoom(data, socket) {
+    console.log(data);
 
-    // The data object should have 'offer' and 'room' properties
-    const offer = data.offer; // This should be the RTCSessionDescription
-    const room = data.room; // This is the room ID
+    const roomID = data.room;
 
-    // Now emit the offer to the specified room
-    this.server.to(room.toString()).emit('offer', offer);
+    if (this.users[roomID]) {
+      const length = this.users[roomID].length;
+      if (length === 4) {
+        socket.emit('room full');
+        return;
+      }
+      this.users[roomID].push(socket.id);
+    } else {
+      this.users[roomID] = [socket.id];
+    }
+    this.socketToRoom[socket.id] = roomID;
+    const usersInThisRoom = this.users[roomID].filter((id) => id !== socket.id);
+
+    this.server.emit('all users', usersInThisRoom);
   }
 
-  @SubscribeMessage('answer')
-  handleAnswer(
-    @MessageBody() data: any,
-    @ConnectedSocket() client: Socket,
-  ): void {
-    console.log(data); // This should show the entire object received
-
-    // The data object should have 'offer' and 'room' properties
-    const answer = data.answer; // This should be the RTCSessionDescription
-    const room = 11; // This is the room ID
-
-    this.server.to(room.toString()).emit('answer', answer);
-  }
-
-  @SubscribeMessage('join-room')
-  joinRoom(@MessageBody() data: any, @ConnectedSocket() client: Socket): void {
-    const roomId = data.room;
-    const userId = data.id;
-
-    console.log(userId, 'roomId');
-
-    this.server.to(roomId).emit('user-connected', userId);
-
-    this.server.on('disconnect', () => {
-      this.server.to(roomId).emit('user-disconnected', userId);
+  @SubscribeMessage('sending signal')
+  handleSendingSignal(payload, client) {
+    this.server.to(payload.userToSignal).emit('user joined', {
+      signal: payload.signal,
+      callerID: payload.callerID,
     });
   }
 
-  @SubscribeMessage('candidate')
-  handleCandidate(
-    @MessageBody() data: any,
-    @ConnectedSocket() client: Socket,
-  ): void {
-    console.log(data); // This should show the entire object received
-
-    // The data object should have 'offer' and 'room' properties
-    const answer = data.answer; // This should be the RTCSessionDescription
-    const room = 11; // This is the room ID
-
-    this.server.to(room.toString()).emit('candidate', data);
+  @SubscribeMessage('returning signal')
+  handleReturningSignal(payload, client) {
+    this.server.to(payload.callerID).emit('receiving returned signal', {
+      signal: payload.signal,
+      id: client.id,
+    });
   }
 
   afterInit(server: Server) {
@@ -100,9 +86,5 @@ export class ChatGateway
     if (room) {
       client.join(room.toString());
     }
-  }
-
-  handleDisconnect(client: Socket) {
-    console.log(`Client disconnected: ${client.id}`);
   }
 }
